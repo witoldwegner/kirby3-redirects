@@ -65,7 +65,7 @@ test('redirects regex', function () {
     ]);
     $check = $r->checkForRedirect();
 
-    expect($check)->not->toBeNull();
+    expect($check)->not()->toBeNull();
     expect($check->code())->toEqual(304);
 });
 test('redirects regex placeholders', function () {
@@ -75,7 +75,7 @@ test('redirects regex placeholders', function () {
     ]);
     $check = $r->checkForRedirect();
 
-    expect($check)->not->toBeNull();
+    expect($check)->not()->toBeNull();
     expect($check->code())->toEqual(303);
 });
 test('redirects non301', function () {
@@ -85,6 +85,6 @@ test('redirects non301', function () {
     ]);
     $check = $r->checkForRedirect();
 
-    expect($check)->not->toBeNull();
+    expect($check)->not()->toBeNull();
     expect($check->code())->toEqual(418);
 });

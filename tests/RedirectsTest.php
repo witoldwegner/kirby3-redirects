@@ -82,8 +82,27 @@ test('no map', function () {
     $check = $redirects->checkForRedirect();
     expect($check)->toBeNull();
 });
+test('wordpress block a', function () {
+    $options = [
+        'site.url' => 'http://redirects.test/',
+        'request.uri' => '/wp-content/themes/test/index.js',
+    ];
+    $redirects = new Redirects($options);
+    $check = $redirects->checkForRedirect();
+    expect($check->code() === 404)->toBeTrue();
+});
+test('wordpress block b', function () {
+    $options = [
+        'site.url' => 'http://redirects.test/',
+        'request.uri' => '/xmlrpc.php?action=pingback.ping',
+    ];
+    $redirects = new Redirects($options);
+    $check = $redirects->checkForRedirect();
+    expect($check->code() === 404)->toBeTrue();
+});
 test('append remove', function () {
     $redirects = new Redirects;
+    $old = file_get_contents(__DIR__.'/content/site.txt');
 
     $hash = md5((string) time());
     $success = $redirects->append(
@@ -118,22 +137,7 @@ test('append remove', function () {
     ]);
     $success = $redirects->append([['fromuri' => '/old-'.$hash, 'touri' => '/new']]);
     expect($success)->toBeFalse();
-});
-test('wordpress block a', function () {
-    $options = [
-        'site.url' => 'http://redirects.test/',
-        'request.uri' => '/wp-content/themes/test/index.js',
-    ];
-    $redirects = new Redirects($options);
-    $check = $redirects->checkForRedirect();
-    expect($check->code() === 404)->toBeTrue();
-});
-test('wordpress block b', function () {
-    $options = [
-        'site.url' => 'http://redirects.test/',
-        'request.uri' => '/xmlrpc.php?action=pingback.ping',
-    ];
-    $redirects = new Redirects($options);
-    $check = $redirects->checkForRedirect();
-    expect($check->code() === 404)->toBeTrue();
+
+    // restore
+    file_put_contents(__DIR__.'/content/site.txt', $old);
 });
