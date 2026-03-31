@@ -44,7 +44,7 @@ class Redirects
         }
 
         // make sure the request.uri starts with a /
-        $this->options['request.uri'] = '/'.ltrim($this->options['request.uri'], '/');
+        $this->options['request.uri'] = '/' . ltrim($this->options['request.uri'], '/');
 
         $this->loadRedirectsFromSource($this->options['map']);
         $this->addShieldToRedirects();
@@ -83,14 +83,16 @@ class Redirects
             return $this->options['redirects'];
         }
         // array_merge is not working properly here, so we do it manually
-        foreach ([
-            'shield.generic',
-            'shield.wordpress',
-            'shield.joomla',
-            'shield.drupal',
-            'shield.magento',
-            'shield.shopify',
-        ] as $shield) {
+        foreach (
+            [
+                'shield.generic',
+                'shield.wordpress',
+                'shield.joomla',
+                'shield.drupal',
+                'shield.magento',
+                'shield.shopify',
+            ] as $shield
+        ) {
             foreach ($this->options[$shield] as $redirect) {
                 $this->options['redirects'][] = $redirect;
             }
@@ -146,8 +148,10 @@ class Redirects
         $copy = $data;
         foreach ($change as $item) {
             foreach ($copy as $key => $redirect) {
-                if (A::get($redirect, 'fromuri') === A::get($item, 'fromuri') &&
-                    A::get($redirect, 'touri') === A::get($item, 'touri')) {
+                if (
+                    A::get($redirect, 'fromuri') === A::get($item, 'fromuri') &&
+                    A::get($redirect, 'touri') === A::get($item, 'touri')
+                ) {
                     unset($data[$key]);
                     break; // exit inner loop
                 }
@@ -228,10 +232,19 @@ class Redirects
         if (array_key_exists($requesturi, $map)) {
             $map = [$map[$requesturi]];
         }
+
+        $currentDomain = $this->getCurrentDomainIdentifier();
+
         foreach ($map as $redirect) {
-            if (! array_key_exists('fromuri', $redirect) ||
+            if (
+                ! array_key_exists('fromuri', $redirect) ||
                 ! array_key_exists('touri', $redirect)
             ) {
+                continue;
+            }
+
+            // Check if this redirect applies to the current domain
+            if (! $this->isDomainApplicable($redirect, $currentDomain)) {
                 continue;
             }
 
@@ -255,13 +268,69 @@ class Redirects
         return null;
     }
 
+    /**
+     * Check if a redirect applies to the current domain
+     * 
+     * @param array $redirect The redirect configuration
+     * @param string $currentDomain The current domain identifier (e.g., 'polizei-einstellungstest', 'ausbildungspark')
+     * @return bool True if redirect should be applied, false otherwise
+     */
+    private function isDomainApplicable(array $redirect, string $currentDomain): bool
+    {
+        $domain = A::get($redirect, 'domain', '');
+
+        // If no domain is specified (empty), this redirect applies globally
+        if (empty(trim($domain))) {
+            return true;
+        }
+
+        // Check if the current domain contains the specified domain identifier
+        return str_contains($currentDomain, trim($domain));
+    }
+
+    /**
+     * Get the current domain identifier from the request hostname
+     * 
+     * Examples:
+     * - polizei-einstellungstest.de → 'polizei-einstellungstest'
+     * - polizei-einstellungstest-de.ww → 'polizei-einstellungstest'
+     * - ausbildungspark.com → 'ausbildungspark'
+     * - ausbildungspark-de.ww → 'ausbildungspark'
+     * 
+     * @return string The domain identifier
+     */
+    private function getCurrentDomainIdentifier(): string
+    {
+        try {
+            $host = kirby()->request()->url()->host();
+        } catch (\Exception $e) {
+            // Fallback to main domain if host detection fails
+            return 'ausbildungspark';
+        }
+
+        // Extract first part of hostname before dot or dash+code
+        // Examples: polizei-einstellungstest-de.ww → polizei-einstellungstest
+        //           polizei-einstellungstest.de → polizei-einstellungstest
+        //           ausbildungspark-de.ww → ausbildungspark
+
+        // Remove TLD/domain suffix (everything after first dot)
+        $parts = explode('.', $host);
+        $domain = $parts[0];
+
+        // If domain contains hyphens followed by language code (e.g., -de, -en), remove that part
+        // Match pattern: -xx where xx is 1-3 chars (typical language codes)
+        $domain = preg_replace('/-[a-z]{1,3}$/', '', $domain);
+
+        return $domain;
+    }
+
     private function makeRelativePath(string $url): string
     {
         $siteurl = A::get($this->options, 'site.url');
         $sitebase = Url::path($siteurl, true, true);
         $url = $siteurl !== '/' ? str_replace($siteurl, '', $url) : $url;
 
-        return '/'.trim($sitebase.$url, '/');
+        return '/' . trim($sitebase . $url, '/');
     }
 
     private function getRequestURI(): string

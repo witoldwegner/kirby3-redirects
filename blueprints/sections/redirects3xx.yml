@@ -21,13 +21,24 @@ fields:
         label:
           en: "Status Code"
           de: "Status Code"
-        default: '301'
+        default: "301"
         type: select
         options:
-          '_300': '300: Multiple Choices'
-          '_301': '301: Moved Permanently'
-          '_302': '302: Found'
-          '_303': '303: See Other'
-          '_304': '304: Not Modified'
-          '_307': '307: Temporary Redirect'
-          '_308': '308: Permanent Redirect'
+          "_300": "300: Multiple Choices"
+          "_301": "301: Moved Permanently"
+          "_302": "302: Found"
+          "_303": "303: See Other"
+          "_304": "304: Not Modified"
+          "_307": "307: Temporary Redirect"
+          "_308": "308: Permanent Redirect"
+      domain:
+        label:
+          en: "Domain-Substring (optional)"
+          de: "Domain-Substring (optional)"
+        type: text
+        placeholder:
+          en: "e.g. example"
+          de: "z.B. example"
+        help:
+          en: "Leave empty for global redirects. Enter domain identifier (e.g. 'example' for example.com) to apply only to specific domains."
+          de: "Leer lassen für globale Redirects. Domain-Identifier eingeben (z.B. 'example' für example.com) um nur auf spezifische Domains anzuwenden."
