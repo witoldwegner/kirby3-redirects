@@ -103,8 +103,23 @@ class Redirects
 
     private function buildLookup(): array
     {
-        $this->options['redirects'] = array_column($this->options['redirects'], null, 'fromuri');
-
+        // Keep all redirects (don't collapse by fromuri) to support domain-specific overrides
+        // Sort domain-specific redirects before global ones so scoped matches take precedence
+        $redirects = $this->options['redirects'];
+        
+        usort($redirects, function ($a, $b) {
+            $domainA = ! empty(trim(A::get($a, 'domain', '')));
+            $domainB = ! empty(trim(A::get($b, 'domain', '')));
+            
+            // Sort domain-specific (true) before global (false)
+            // In usort: negative = $a first, positive = $b first, 0 = equal
+            if ($domainA === $domainB) {
+                return 0; // maintain order for same priority
+            }
+            return $domainA ? -1 : 1; // domain-specific first
+        });
+        
+        $this->options['redirects'] = $redirects;
         return $this->options['redirects'];
     }
 
@@ -150,7 +165,8 @@ class Redirects
             foreach ($copy as $key => $redirect) {
                 if (
                     A::get($redirect, 'fromuri') === A::get($item, 'fromuri') &&
-                    A::get($redirect, 'touri') === A::get($item, 'touri')
+                    A::get($redirect, 'touri') === A::get($item, 'touri') &&
+                    A::get($redirect, 'domain') === A::get($item, 'domain')
                 ) {
                     unset($data[$key]);
                     break; // exit inner loop
@@ -205,9 +221,10 @@ class Redirects
         return $this->options['parent'];
     }
 
-    public static function isKnownValidRoute(string $path): bool
+    public static function isKnownValidRoute(string $path, string $domain = ''): bool
     {
-        return kirby()->cache('bnomei.redirects')->get(md5($path)) !== null;
+        $cacheKey = md5($path . $domain);
+        return kirby()->cache('bnomei.redirects')->get($cacheKey) !== null;
     }
 
     public static function flush(): bool
@@ -218,7 +235,10 @@ class Redirects
     public function checkForRedirect(?string $uri = null): ?Redirect
     {
         $requesturi = $uri ?? (string) $this->options['request.uri'];
-        if (static::isKnownValidRoute($requesturi)) {
+        $currentDomain = $this->getCurrentDomainIdentifier();
+        $cacheKey = md5($requesturi . $currentDomain);
+        
+        if (static::isKnownValidRoute($requesturi, $currentDomain)) {
             return null;
         }
 
@@ -228,14 +248,19 @@ class Redirects
         }
 
         $r = new Redirect;
-        // try direct lookup first and only do that in a match
-        if (array_key_exists($requesturi, $map)) {
-            $map = [$map[$requesturi]];
+        // Collect all redirects for this path (not just first match)
+        $candidates = [];
+        foreach ($map as $redirect) {
+            if (A::get($redirect, 'fromuri') === $requesturi) {
+                $candidates[] = $redirect;
+            }
+        }
+        // If no direct matches, check all redirects
+        if (empty($candidates)) {
+            $candidates = $map;
         }
 
-        $currentDomain = $this->getCurrentDomainIdentifier();
-
-        foreach ($map as $redirect) {
+        foreach ($candidates as $redirect) {
             if (
                 ! array_key_exists('fromuri', $redirect) ||
                 ! array_key_exists('touri', $redirect)
@@ -259,10 +284,11 @@ class Redirects
             }
         }
 
-        // no redirect found, flag as valid route
+        // no redirect found, flag as valid route per domain
         // so it is not checked again until the cache is flushed
-        kirby()->cache('bnomei.redirects')->set(md5($requesturi), [
+        kirby()->cache('bnomei.redirects')->set($cacheKey, [
             $requesturi,
+            $currentDomain,
         ]);
 
         return null;
@@ -292,9 +318,9 @@ class Redirects
      * Get the current domain identifier from the request hostname
      * 
      * Examples:
-     * - polizei-einstellungstest.de → 'polizei-einstellungstest'
+     * - www.polizei-einstellungstest.de → 'polizei-einstellungstest'
      * - polizei-einstellungstest-de.ww → 'polizei-einstellungstest'
-     * - ausbildungspark.com → 'ausbildungspark'
+     * - www.ausbildungspark.com → 'ausbildungspark'
      * - ausbildungspark-de.ww → 'ausbildungspark'
      * 
      * @return string The domain identifier
@@ -304,14 +330,22 @@ class Redirects
         try {
             $host = kirby()->request()->url()->host();
         } catch (\Exception $e) {
-            // Fallback to main domain if host detection fails
-            return 'ausbildungspark';
+            // Fallback to site.url if host detection fails
+            $siteurl = A::get($this->options, 'site.url', '');
+            if (! empty($siteurl)) {
+                $host = parse_url($siteurl, PHP_URL_HOST) ?? '';
+                if (empty($host)) {
+                    return '';
+                }
+            } else {
+                return '';
+            }
         }
 
-        // Extract first part of hostname before dot or dash+code
-        // Examples: polizei-einstellungstest-de.ww → polizei-einstellungstest
-        //           polizei-einstellungstest.de → polizei-einstellungstest
-        //           ausbildungspark-de.ww → ausbildungspark
+        // Remove www prefix if present
+        if (str_starts_with($host, 'www.')) {
+            $host = substr($host, 4);
+        }
 
         // Remove TLD/domain suffix (everything after first dot)
         $parts = explode('.', $host);
